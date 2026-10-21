@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReSkate Shader Preview — GLB + Flipbook + Dual Fabric</title>
+  <style>
+    :root {
+      --bg: #0d0e12; --panel: #16181f; --border: #2a2d38;
+      --text: #e8eaef; --muted: #8b90a0; --accent: #5b8cff; --accent2: #3dd6c6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg); color: var(--text);
+      height: 100vh; display: flex; overflow: hidden;
+    }
+    #viewport { flex: 1; position: relative; min-width: 0; }
+    #viewport canvas { display: block; width: 100%; height: 100%; }
+    #hud {
+      position: absolute; left: 12px; bottom: 12px; font-size: 12px;
+      color: var(--muted); pointer-events: none; max-width: 55%; line-height: 1.45;
+    }
+    aside {
+      width: 360px; background: var(--panel); border-left: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    aside header {
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
+      font-weight: 600; font-size: 14px;
+    }
+    aside header span {
+      display: block; font-weight: 400; font-size: 11px; color: var(--muted); margin-top: 4px;
+    }
+    .scroll { flex: 1; overflow-y: auto; padding: 12px 16px 28px; }
+    section { margin-bottom: 16px; }
+    section h3 {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--muted); margin-bottom: 10px;
+    }
+    .file-btn {
+      display: block; width: 100%; padding: 9px 12px; background: #1e2230;
+      border: 1px dashed var(--border); border-radius: 8px; color: var(--text);
+      cursor: pointer; font-size: 12px; text-align: center;
+    }
+    .file-btn:hover { border-color: var(--accent); }
+    .file-btn input { display: none; }
+    .file-name { font-size: 11px; color: var(--accent2); margin-top: 5px; word-break: break-all; }
+    .row {
+      display: grid; grid-template-columns: 1fr auto; gap: 6px;
+      align-items: center; margin-bottom: 8px;
+    }
+    .row label { font-size: 12px; }
+    .row .val { font-size: 11px; color: var(--accent2); min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
+    input[type="range"] { width: 100%; grid-column: 1 / -1; accent-color: var(--accent); }
+    input[type="number"] {
+      width: 100%; padding: 6px 8px; background: #1e2230; border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 13px;
+    }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .hint { font-size: 11px; color: var(--muted); line-height: 1.4; margin-top: 6px; }
+    .check {
+      display: flex; align-items: center; gap: 8px; font-size: 12px;
+      margin-bottom: 8px; cursor: pointer;
+    }
+    button.action {
+      width: 100%; padding: 10px; border: none; border-radius: 8px;
+      background: var(--accent); color: #fff; font-weight: 600; font-size: 13px;
+      cursor: pointer; margin-top: 4px;
+    }
+    button.action.secondary { background: #2a2f3d; color: var(--text); }
+    button.action:hover { filter: brightness(1.08); }
+    .preview-tex {
+      width: 100%; max-height: 80px; object-fit: contain; background: #0a0b0e;
+      border-radius: 6px; border: 1px solid var(--border); margin-top: 6px;
+      image-rendering: pixelated;
+    }
+    .mesh-list { max-height: 100px; overflow-y: auto; font-size: 12px; }
+    .mesh-list label { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; }
+    .subpanel {
+      background: #12141a; border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px; margin-bottom: 10px;
+    }
+    .subpanel h4 { font-size: 12px; color: var(--accent2); margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div id="viewport"><div id="hud">GLB + channel0 (gif) + optional fabric slices · orbit LMB</div></div>
+  <aside>
+    <header>
+      ReSkate Shader Preview
+      <span>Dual fabric UV fix + gif decal · export Studio HLSL</span>
+    </header>
+    <div class="scroll">
+      <section>
+        <h3>1. Model</h3>
+        <label class="file-btn">Upload GLB<input type="file" id="glbInput" accept=".glb,.gltf" /></label>
+        <div class="file-name" id="glbName">No model</div>
+      </section>
+
+      <section>
+        <h3>2. Image 0 — gif 1 spritesheet</h3>
+        <label class="file-btn">Upload sheet<input type="file" id="texInput" accept="image/*" /></label>
+        <div class="file-name" id="texName">—</div>
+        <img id="texPreview" class="preview-tex" style="display:none" alt="" />
+        <div class="grid2" style="margin-top:8px">
+          <div><label style="font-size:11px">Columns</label><input type="number" id="cols" min="1" value="2" /></div>
+          <div><label style="font-size:11px">Rows</label><input type="number" id="rows" min="1" value="5" /></div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <label>Anim speed</label><span class="val" id="speedVal">12</span>
+          <input type="range" id="speed" min="0.1" max="60" step="0.1" value="12" />
+        </div>
+      </section>
+
+      <section>
+        <h3>3. Fabric (Substance-style UDIM)</h3>
+        <p class="hint">
+          Same as Painter: export Base C slices from Studio, rename ends to
+          <b>.1001</b> (tile 0,0) and <b>.1011</b> (tile 0,1), then import here.
+          Multi-select both at once — names auto-assign.
+        </p>
+        <label class="file-btn">
+          Import UDIM textures (.1001 / .1011 …)
+          <input type="file" id="udimInput" accept="image/*" multiple />
+        </label>
+        <div class="file-name" id="udimStatus">No UDIM textures yet</div>
+
+        <div class="subpanel">
+          <h4>Image 2 — fabric .1001 → tile (0,0)</h4>
+          <label class="file-btn">Or upload slice 0<input type="file" id="fab0Input" accept="image/*" /></label>
+          <div class="file-name" id="fab0Name">—</div>
+          <div class="row"><label>UV offset X</label><span class="val" id="f0oxVal">0.00</span>
+            <input type="range" id="f0ox" min="-2" max="2" step="0.01" value="0" /></div>
+          <div class="row"><label>UV offset Y</label><span class="val" id="f0oyVal">0.00</span>
+            <input type="range" id="f0oy" min="-2" max="2" step="0.01" value="0" /></div>
+          <div class="row"><label>UV scale X</label><span class="val" id="f0sxVal">1.00</span>
+            <input type="range" id="f0sx" min="0.1" max="4" step="0.01" value="1" /></div>
+          <div class="row"><label>UV scale Y</label><span class="val" id="f0syVal">1.00</span>
+            <input type="range" id="f0sy" min="0.1" max="4" step="0.01" value="1" /></div>
+          <label class="check"><input type="checkbox" id="f0flipY" /> Flip Y</label>
+        </div>
+
+        <div class="subpanel">
+          <h4>Image 3 — fabric .1011 → tile (0,1)</h4>
+          <label class="file-btn">Or upload slice 1<input type="file" id="fab1Input" accept="image/*" /></label>
+          <div class="file-name" id="fab1Name">—</div>
+          <div class="row"><label>UV offset X</label><span class="val" id="f1oxVal">0.00</span>
+            <input type="range" id="f1ox" min="-2" max="2" step="0.01" value="0" /></div>
+          <div class="row"><label>UV offset Y</label><span class="val" id="f1oyVal">0.00</span>
+            <input type="range" id="f1oy" min="-2" max="2" step="0.01" value="0" /></div>
+          <div class="row"><label>UV scale X</label><span class="val" id="f1sxVal">1.00</span>
+            <input type="range" id="f1sx" min="0.1" max="4" step="0.01" value="1" /></div>
+          <div class="row"><label>UV scale Y</label><span class="val" id="f1syVal">1.00</span>
+            <input type="range" id="f1sy" min="0.1" max="4" step="0.01" value="1" /></div>
+          <label class="check"><input type="checkbox" id="f1flipY" /> Flip Y</label>
+        </div>
+
+        <div class="row">
+          <label>Slice split (UV.x)</label><span class="val" id="splitVal">0.50</span>
+          <input type="range" id="uvSplit" min="0" max="1" step="0.01" value="0.5" />
+        </div>
+        <label class="check"><input type="checkbox" id="splitByY" /> Split by UV.y instead of UV.x</label>
+        <label class="check"><input type="checkbox" id="swapSlices" /> Swap slice 0 / 1</label>
+        <label class="check"><input type="checkbox" id="udimMode" checked />
+          UDIM auto (.1001 + .1011)
+        </label>
+        <p class="hint">
+          <b>UDIM on (default):</b> slice0 = tile 1001 (UV 0–1), slice1 = tile 1011 (UV.y 1–2 → unwrap −(0,1)).
+          Manual offset/scale still apply as fine-tune after UDIM.
+        </p>
+      </section>
+
+      <section>
+        <h3>4. Gif decal placement</h3>
+        <p class="hint">Sliders place the <b>center</b> of the gif on the UV map (0–1 = full island; extend past 0–1 for other tiles / sides).</p>
+        <div class="row"><label>Center U (X)</label><span class="val" id="oxVal">0.50</span>
+          <input type="range" id="ox" min="-0.5" max="2.5" step="0.01" value="0.5" /></div>
+        <div class="row"><label>Center V (Y)</label><span class="val" id="oyVal">0.50</span>
+          <input type="range" id="oy" min="-0.5" max="2.5" step="0.01" value="0.5" /></div>
+        <div class="row"><label>Scale X (↑ = smaller)</label><span class="val" id="sxVal">2.50</span>
+          <input type="range" id="sx" min="0.2" max="8" step="0.01" value="2.5" /></div>
+        <div class="row"><label>Scale Y (↑ = smaller)</label><span class="val" id="syVal">2.50</span>
+          <input type="range" id="sy" min="0.2" max="8" step="0.01" value="2.5" /></div>
+        <label class="check"><input type="checkbox" id="perTile" checked />
+          Per UV-tile stamp
+        </label>
+        <label class="check"><input type="checkbox" id="debugTiles" />
+          Debug: color mesh by UV tile (find the back)
+        </label>
+        <p class="hint">Debug colors: each UV tile gets a unique color. Rotate to the back and note the color, then pick that tile as Back.</p>
+        <p class="hint">
+          One gif per 1×1 UV tile. Detect tiles from the GLB, then uncheck ones you do not want (e.g. bottom).
+        </p>
+        <div id="tileBox" class="subpanel" style="display:none">
+          <h4>Gif on which UV tile?</h4>
+          <p class="hint" id="tileHint">
+            All works on every tile. Front is (0,0). Pick <b>Back tile</b> by testing which one lights up the back of the mesh.
+          </p>
+          <label class="check"><input type="radio" name="gifSide" value="front" checked /> Front only (0,0)</label>
+          <label class="check"><input type="radio" name="gifSide" value="back" /> Back only (selected tile)</label>
+          <label class="check"><input type="radio" name="gifSide" value="both" /> Front + back</label>
+          <label class="check"><input type="radio" name="gifSide" value="all" /> All UV tiles</label>
+          <div style="margin-top:10px">
+            <label style="font-size:12px">Back tile</label>
+            <select id="backTileSelect" style="width:100%;margin-top:4px;padding:6px;background:#1e2230;color:#e8eaef;border:1px solid #2a2d38;border-radius:6px">
+              <option value="1,0">tile (1,0)</option>
+              <option value="2,0">tile (2,0)</option>
+            </select>
+          </div>
+          <button type="button" class="action secondary" id="btnCycleBack" style="margin-top:8px">Cycle back tile (find the back)</button>
+          <div class="file-name" id="tileMapInfo" style="margin-top:8px">—</div>
+        </div>
+        <label class="check"><input type="checkbox" id="decalMode" checked /> Decal mode (no wallpaper tile)</label>
+        <label class="check"><input type="checkbox" id="flipY" checked /> Flip gif Y in preview</label>
+        <label class="check"><input type="checkbox" id="useAlpha" checked /> Use gif alpha</label>
+        <div class="row"><label>Mix</label><span class="val" id="mixVal">1.00</span>
+          <input type="range" id="mix" min="0" max="1" step="0.01" value="1" /></div>
+        <div class="row" style="margin-top:8px">
+          <label>Gif rotation</label>
+          <span class="val" id="rotVal">0°</span>
+        </div>
+        <button type="button" class="action secondary" id="btnRot">Rotate gif 90°</button>
+        <p class="hint">Cycles 0° → 90° → 180° → 270° → 0° (UV space, before flipbook frame).</p>
+      </section>
+
+      <section>
+        <h3>4b. Second gif (Image 1 / iChannel1)</h3>
+        <label class="check"><input type="checkbox" id="gif2Enable" /> Enable second gif</label>
+        <label class="file-btn">Upload second spritesheet<input type="file" id="tex2Input" accept="image/*" /></label>
+        <div class="file-name" id="tex2Name">—</div>
+        <div class="grid2" style="margin-top:8px">
+          <div><label style="font-size:11px">Columns</label><input type="number" id="cols2" min="1" value="1" /></div>
+          <div><label style="font-size:11px">Rows</label><input type="number" id="rows2" min="1" value="1" /></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <label>Anim speed 2</label><span class="val" id="speed2Val">12</span>
+          <input type="range" id="speed2" min="0.1" max="60" step="0.1" value="12" />
+        </div>
+        <div class="row"><label>Center U 2</label><span class="val" id="ox2Val">0.50</span>
+          <input type="range" id="ox2" min="-0.5" max="2.5" step="0.01" value="0.5" /></div>
+        <div class="row"><label>Center V 2</label><span class="val" id="oy2Val">0.50</span>
+          <input type="range" id="oy2" min="-0.5" max="2.5" step="0.01" value="0.5" /></div>
+        <div class="row"><label>Scale X 2</label><span class="val" id="sx2Val">2.50</span>
+          <input type="range" id="sx2" min="0.2" max="8" step="0.01" value="2.5" /></div>
+        <div class="row"><label>Scale Y 2</label><span class="val" id="sy2Val">2.50</span>
+          <input type="range" id="sy2" min="0.2" max="8" step="0.01" value="2.5" /></div>
+        <div class="row"><label>Mix 2</label><span class="val" id="mix2Val">1.00</span>
+          <input type="range" id="mix2" min="0" max="1" step="0.01" value="1" /></div>
+        <div class="row" style="margin-top:8px">
+          <label>Gif 2 rotation</label>
+          <span class="val" id="rot2Val">0°</span>
+        </div>
+        <button type="button" class="action secondary" id="btnRot2">Rotate gif 2 by 90°</button>
+        <label class="check"><input type="checkbox" id="flipY2" checked /> Flip gif 2 Y in preview</label>
+        <p class="hint">If Studio is upside-down for gif 2 only, toggle this and re-copy (export inverts relative to preview, same as gif 1).</p>
+        <p class="hint" style="margin-top:8px">Gif 2 tile (independent of gif 1)</p>
+        <label class="check"><input type="radio" name="gif2Side" value="front" /> Front (0,0)</label>
+        <label class="check"><input type="radio" name="gif2Side" value="back" checked /> Back (selected)</label>
+        <label class="check"><input type="radio" name="gif2Side" value="both" /> Front + back</label>
+        <label class="check"><input type="radio" name="gif2Side" value="all" /> All tiles</label>
+        <label class="check"><input type="checkbox" id="dbgGif2" /> Export debug: paint gif 2 window solid magenta</label>
+        <label class="check"><input type="checkbox" id="noColorFix" /> Export without colour fix</label>
+        <p class="hint">Uses the same <b>Back tile</b> dropdown as gif 1. Studio: <b>Image 1</b> = this sheet (gif2).</p>
+      </section>
+
+      <section>
+        <h3>5. Meshes</h3>
+        <div class="mesh-list" id="meshList"><span class="hint">Load GLB</span></div>
+        <button type="button" class="action secondary" id="btnAllOn">Shade all</button>
+        <button type="button" class="action secondary" id="btnAllOff">Shade none</button>
+      </section>
+
+      <section>
+        <h3>6. Studio export</h3>
+        <div class="grid2" style="margin-bottom:8px">
+          <div><label style="font-size:11px">gif 1 slot</label><select id="chGif1" style="width:100%;padding:6px;background:#1e2230;color:#e8eaef;border:1px solid #2a2d38;border-radius:6px"><option>0</option><option>1</option><option>2</option><option>3</option></select></div>
+          <div><label style="font-size:11px">gif 2 slot</label><select id="chGif2" style="width:100%;padding:6px;background:#1e2230;color:#e8eaef;border:1px solid #2a2d38;border-radius:6px"><option>0</option><option selected>1</option><option>2</option><option>3</option></select></div>
+          <div><label style="font-size:11px">fabric .1001 slot</label><select id="chFab0" style="width:100%;padding:6px;background:#1e2230;color:#e8eaef;border:1px solid #2a2d38;border-radius:6px"><option>0</option><option>1</option><option selected>2</option><option>3</option></select></div>
+          <div><label style="font-size:11px">fabric .1011 slot</label><select id="chFab1" style="width:100%;padding:6px;background:#1e2230;color:#e8eaef;border:1px solid #2a2d38;border-radius:6px"><option>0</option><option>1</option><option>2</option><option selected>3</option></select></div>
+        </div>
+        <p class="hint" style="margin-bottom:8px">Must match what is loaded in each Studio Image slot. Swap slots here + in Studio to test.</p>
+        <button type="button" class="action" id="btnCopy">Copy full HLSL for Studio</button>
+        <p class="hint" id="copyStatus">Includes fabric UV transforms + dual-slice logic.</p>
+      </section>
+    </div>
+  </aside>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+const vertexShader = /* glsl */`
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const fragmentShader = /* glsl */`
+uniform sampler2D iChannel0;
+uniform sampler2D iChannel3;
+uniform float hasGif2;
+uniform sampler2D fabric0;
+uniform sampler2D fabric1;
+uniform float hasFab0;
+uniform float hasFab1;
+uniform float iTime;
+uniform float totalColumns, totalRows, animSpeed;
+uniform float moveLeftRight, moveUpDown, scaleX, scaleY;
+uniform float mixAmt, useAlpha, decalMode, flipY, perTile;
+uniform float gifRot;
+uniform float gifRot2;
+uniform float flipY2;
+uniform float maskMode2; // 0 all 1 front 2 back 3 both
+uniform float totalColumns2, totalRows2, animSpeed2;
+uniform float moveLeftRight2, moveUpDown2, scaleX2, scaleY2, mixAmt2;
+uniform sampler2D tileMask;
+uniform float useTileMask;
+uniform float debugTiles;
+uniform float maskMode;
+uniform float backU;
+uniform float backV;
+uniform float f0ox, f0oy, f0sx, f0sy, f0flipY;
+uniform float f1ox, f1oy, f1sx, f1sy, f1flipY;
+uniform float uvSplit, splitByY, swapSlices, udimMode;
+uniform vec3 baseTint;
+
+varying vec2 vUv;
+
+vec2 xformUV(vec2 uv, float ox, float oy, float sx, float sy, float flip) {
+  vec2 u = uv;
+  u.x = (u.x + ox - 0.5) * sx + 0.5;
+  u.y = (u.y + oy - 0.5) * sy + 0.5;
+  if (flip > 0.5) u.y = 1.0 - u.y;
+  return u;
+}
+
+void main() {
+  // --- dual fabric: Substance UDIM (.1001 / .1011) ---
+  // Mesh UVs in tile space; each texture is 0-1 local like Painter
+  vec2 tile = floor(vUv + 1e-5);
+  vec2 local = fract(vUv);
+  // stabilize exact integers
+  if (local.x < 1e-5) local.x = 0.0;
+  if (local.y < 1e-5) local.y = 0.0;
+
+  float use0 = 1.0;
+  if (udimMode > 0.5) {
+    // 1001 = (0,0), 1011 = (0,1)
+    use0 = (tile.x < 0.5 && tile.y < 0.5) ? 1.0 : 0.0;
+    if (tile.x < 0.5 && tile.y >= 0.5 && tile.y < 1.5) use0 = 0.0;
+  } else {
+    float axis = splitByY > 0.5 ? vUv.y : vUv.x;
+    use0 = axis < uvSplit ? 1.0 : 0.0;
+    local = vUv; // non-UDIM: sample with full uv + manual xform
+  }
+  if (swapSlices > 0.5) use0 = 1.0 - use0;
+
+  vec2 u0 = xformUV(local, f0ox, f0oy, f0sx, f0sy, f0flipY);
+  vec2 u1 = xformUV(local, f1ox, f1oy, f1sx, f1sy, f1flipY);
+
+  vec3 fab0 = hasFab0 > 0.5 ? texture2D(fabric0, u0).rgb : baseTint;
+  vec3 fab1 = hasFab1 > 0.5 ? texture2D(fabric1, u1).rgb : fab0;
+
+  vec3 fabric = mix(fab1, fab0, use0);
+  if (hasFab0 > 0.5 && hasFab1 < 0.5) fabric = fab0;
+  if (hasFab1 > 0.5 && hasFab0 < 0.5) fabric = fab1;
+
+  // --- gif decal ---
+  // perTile: place in each 1x1 UV cell (all islands/slices), local center 0-1
+  // else: one window in absolute UV
+  vec2 baseUV = vUv;
+  vec2 tileId = floor(vUv);
+  if (perTile > 0.5) {
+    baseUV = fract(vUv);
+  }
+  // tile mask: 8x8 texture, pixel (tx,ty) = enable for tile (tx,ty); origin bottom-left in WebGL
+  // maskMode: 0=all 1=front(0,0) 2=back only 3=front+back
+  float tileOn = 1.0;
+  if (maskMode > 0.5) {
+    float isFront = (abs(tileId.x) < 0.5 && abs(tileId.y) < 0.5) ? 1.0 : 0.0;
+    float isBack = (abs(tileId.x - backU) < 0.5 && abs(tileId.y - backV) < 0.5) ? 1.0 : 0.0;
+    if (maskMode < 1.5) tileOn = isFront;
+    else if (maskMode < 2.5) tileOn = isBack;
+    else tileOn = max(isFront, isBack);
+  }
+
+  vec2 center = vec2(moveLeftRight, moveUpDown);
+  vec2 centerLocal = perTile > 0.5 ? fract(center) : center;
+  vec2 animatedUV = (baseUV - centerLocal) * vec2(scaleX, scaleY) + 0.5;
+
+  float inDecal = tileOn;
+  if (decalMode > 0.5) {
+    inDecal *= step(0.0, animatedUV.x) * step(animatedUV.x, 1.0)
+            * step(0.0, animatedUV.y) * step(animatedUV.y, 1.0);
+    animatedUV = clamp(animatedUV, 0.0, 1.0);
+  } else {
+    animatedUV = fract(animatedUV);
+  }
+
+  if (flipY > 0.5) animatedUV.y = 1.0 - animatedUV.y;
+
+  // rotate local decal UV: 0/90/180/270 around center
+  {
+    vec2 p = animatedUV - 0.5;
+    float r = gifRot; // 0,1,2,3
+    if (r > 0.5 && r < 1.5) { float t = p.x; p.x = -p.y; p.y = t; }       // 90
+    else if (r > 1.5 && r < 2.5) { p = -p; }                                 // 180
+    else if (r > 2.5) { float t = p.x; p.x = p.y; p.y = -t; }               // 270
+    animatedUV = p + 0.5;
+  }
+  animatedUV = animatedUV * 0.996 + 0.002; // keep samples off frame borders
+
+  float totalFrames = max(totalColumns * totalRows, 1.0);
+  float frameIndex = floor(mod(iTime * animSpeed, totalFrames));
+  float currentColumn = mod(frameIndex, totalColumns);
+  float currentRow = floor(frameIndex / totalColumns);
+
+  vec2 sheetUV;
+  sheetUV.x = (animatedUV.x + currentColumn) / totalColumns;
+  sheetUV.y = (animatedUV.y + currentRow) / totalRows;
+
+  if (debugTiles > 0.5) {
+    // unique color per floor(uv) so user can identify which tile is the back
+    vec2 td = floor(vUv + 1e-5);
+    float h = fract(sin(dot(td, vec2(12.9898, 78.233))) * 43758.5453);
+    float h2 = fract(sin(dot(td + 1.7, vec2(39.346, 11.135))) * 23421.631);
+    vec3 dbg = vec3(h, h2, fract(h + h2 + 0.3));
+    // overlay tile id as brightness bands
+    dbg = mix(dbg, vec3(0.1), 0.15);
+    // mark (0,0) clearly green-ish tint edge
+    if (td.x < 0.5 && td.y < 0.5) dbg = mix(dbg, vec3(0.2, 1.0, 0.3), 0.35);
+    gl_FragColor = vec4(dbg, 1.0);
+    return;
+  }
+
+  vec4 tex = texture2D(iChannel0, sheetUV);
+  float a = useAlpha > 0.5 ? tex.a : 1.0;
+  float w = inDecal * a * mixAmt * tileOn;
+  vec3 outRgb = mix(fabric, tex.rgb, w);
+
+  // --- second gif (iChannel3): exact same path as gif 1 (always sample, weight by mask) ---
+  if (hasGif2 > 0.5) {
+    float isF = (abs(tileId.x) < 0.5 && abs(tileId.y) < 0.5) ? 1.0 : 0.0;
+    float isB = (abs(tileId.x - backU) < 0.5 && abs(tileId.y - backV) < 0.5) ? 1.0 : 0.0;
+    float tileOn2 = 1.0;
+    if (maskMode2 > 0.5 && maskMode2 < 1.5) tileOn2 = isF;
+    else if (maskMode2 > 1.5 && maskMode2 < 2.5) tileOn2 = isB;
+    else if (maskMode2 > 2.5) tileOn2 = max(isF, isB);
+
+    vec2 base2 = perTile > 0.5 ? fract(vUv) : vUv;
+    vec2 c2 = perTile > 0.5 ? fract(vec2(moveLeftRight2, moveUpDown2)) : vec2(moveLeftRight2, moveUpDown2);
+    vec2 a2 = (base2 - c2) * vec2(scaleX2, scaleY2) + 0.5;
+    float in2 = tileOn2;
+    if (decalMode > 0.5) {
+      in2 *= step(0.0, a2.x) * step(a2.x, 1.0) * step(0.0, a2.y) * step(a2.y, 1.0);
+      a2 = clamp(a2, 0.0, 1.0);
+    } else {
+      a2 = fract(a2);
+    }
+    if (flipY2 > 0.5) a2.y = 1.0 - a2.y;
+    {
+      vec2 p = a2 - 0.5;
+      float r = gifRot2;
+      if (r > 0.5 && r < 1.5) { float tt = p.x; p.x = -p.y; p.y = tt; }
+      else if (r > 1.5 && r < 2.5) { p = -p; }
+      else if (r > 2.5) { float tt = p.x; p.x = p.y; p.y = -tt; }
+      a2 = p + 0.5;
+    }
+    a2 = a2 * 0.996 + 0.002; // keep samples off frame borders (no neighbour-frame bleed)
+    float tf2 = max(totalColumns2 * totalRows2, 1.0);
+    float fi2 = floor(mod(iTime * animSpeed2, tf2));
+    float cc2 = mod(fi2, totalColumns2);
+    float cr2 = floor(fi2 / totalColumns2);
+    vec2 s2 = vec2((a2.x + cc2) / totalColumns2, (a2.y + cr2) / totalRows2);
+    vec4 t2 = texture2D(iChannel3, s2);
+    float a2a = useAlpha > 0.5 ? t2.a : 1.0;
+    outRgb = mix(outRgb, t2.rgb, in2 * a2a * mixAmt2);
+  }
+
+  gl_FragColor = vec4(outRgb, 1.0);
+}
+`;
+
+const viewport = document.getElementById("viewport");
+const hud = document.getElementById("hud");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0e12);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 500);
+camera.position.set(0, 1.2, 2.4);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+viewport.appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.target.set(0, 0.9, 0);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 1.15));
+const dir = new THREE.DirectionalLight(0xffffff, 1.15);
+dir.position.set(3, 8, 4);
+scene.add(dir);
+scene.add(new THREE.GridHelper(4, 16, 0x333844, 0x1c1e28));
+
+const placeholderData = new Uint8Array([200,200,200,255, 160,160,160,255, 160,160,160,255, 200,200,200,255]);
+const placeholderTex = new THREE.DataTexture(placeholderData, 2, 2);
+placeholderTex.needsUpdate = true;
+placeholderTex.colorSpace = THREE.SRGBColorSpace;
+placeholderTex.wrapS = placeholderTex.wrapT = THREE.RepeatWrapping;
+
+let modelRoot = null;
+const meshEntries = [];
+let channel0 = null, fab0Tex = null, fab1Tex = null;
+
+function makeShadedMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      iChannel0: { value: placeholderTex },
+      iChannel3: { value: placeholderTex },
+      hasGif2: { value: 0 },
+      fabric0: { value: placeholderTex },
+      fabric1: { value: placeholderTex },
+      hasFab0: { value: 0 },
+      hasFab1: { value: 0 },
+      iTime: { value: 0 },
+      totalColumns: { value: 2 }, totalRows: { value: 5 }, animSpeed: { value: 12 },
+      moveLeftRight: { value: 0.5 }, moveUpDown: { value: 0.5 },
+      scaleX: { value: 2.5 }, scaleY: { value: 2.5 },
+      mixAmt: { value: 1 }, useAlpha: { value: 1 }, decalMode: { value: 1 }, flipY: { value: 1 }, perTile: { value: 1 },
+      gifRot: { value: 0 },
+      gifRot2: { value: 0 },
+      flipY2: { value: 1 },
+      maskMode2: { value: 2 },
+      totalColumns2: { value: 1 }, totalRows2: { value: 1 }, animSpeed2: { value: 12 },
+      moveLeftRight2: { value: 0.5 }, moveUpDown2: { value: 0.5 },
+      scaleX2: { value: 2.5 }, scaleY2: { value: 2.5 }, mixAmt2: { value: 1 },
+      tileMask: { value: placeholderTex },
+      useTileMask: { value: 0 },
+      debugTiles: { value: 0 },
+      maskMode: { value: 0 },
+      backU: { value: 1 },
+      backV: { value: 0 },
+      f0ox: { value: 0 }, f0oy: { value: 0 }, f0sx: { value: 1 }, f0sy: { value: 1 }, f0flipY: { value: 0 },
+      f1ox: { value: 0 }, f1oy: { value: 0 }, f1sx: { value: 1 }, f1sy: { value: 1 }, f1flipY: { value: 0 },
+      uvSplit: { value: 0.5 }, splitByY: { value: 0 }, swapSlices: { value: 0 }, udimMode: { value: 1 },
+      baseTint: { value: new THREE.Color(0.85, 0.85, 0.88) },
+    },
+    vertexShader, fragmentShader, side: THREE.DoubleSide,
+  });
+}
+
+function resize() {
+  const w = viewport.clientWidth, h = viewport.clientHeight;
+  camera.aspect = w / Math.max(h, 1);
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false);
+}
+window.addEventListener("resize", resize);
+resize();
+
+function fitCameraToObject(root) {
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  controls.target.copy(center);
+  const maxDim = Math.max(size.x, size.y, size.z, 0.1);
+  camera.position.copy(center).add(new THREE.Vector3(maxDim * 0.55, maxDim * 0.45, maxDim * 1.35));
+  camera.near = maxDim / 200; camera.far = maxDim * 50;
+  camera.updateProjectionMatrix();
+  controls.update();
+}
+
+function clearModel() {
+  if (modelRoot) {
+    scene.remove(modelRoot);
+    modelRoot.traverse((o) => { if (o.isMesh) o.geometry?.dispose?.(); });
+  }
+  meshEntries.length = 0;
+  modelRoot = null;
+  document.getElementById("meshList").innerHTML = '<span class="hint">Load GLB</span>';
+}
+
+function rebuildMeshList() {
+  const list = document.getElementById("meshList");
+  list.innerHTML = "";
+  meshEntries.forEach((entry, i) => {
+    const label = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = entry.useShader;
+    cb.addEventListener("change", () => {
+      entry.useShader = cb.checked;
+      entry.mesh.material = cb.checked ? entry.shadedMaterial : entry.originalMaterial;
+    });
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(" " + (entry.mesh.name || `Mesh ${i}`)));
+    list.appendChild(label);
+  });
+}
+
+function num(id) { return parseFloat(document.getElementById(id).value); }
+function chk(id) { return document.getElementById(id).checked; }
+
+function readUI() {
+  return {
+    totalColumns: num("cols") || 1,
+    totalRows: num("rows") || 1,
+    animSpeed: num("speed"),
+    moveLeftRight: num("ox"), moveUpDown: num("oy"),
+    scaleX: num("sx"), scaleY: num("sy"),
+    mixAmt: num("mix"),
+    useAlpha: chk("useAlpha"), decalMode: chk("decalMode"), flipY: chk("flipY"), perTile: chk("perTile"), debugTiles: chk("debugTiles"),
+    gifRot: window._gifRot || 0,
+    gif2Enable: chk("gif2Enable"), flipY2: chk("flipY2"),
+    totalColumns2: num("cols2") || 1, totalRows2: num("rows2") || 1, animSpeed2: num("speed2"),
+    moveLeftRight2: num("ox2"), moveUpDown2: num("oy2"),
+    scaleX2: num("sx2"), scaleY2: num("sy2"), mixAmt2: num("mix2"),
+    f0ox: num("f0ox"), f0oy: num("f0oy"), f0sx: num("f0sx"), f0sy: num("f0sy"), f0flipY: chk("f0flipY"),
+    f1ox: num("f1ox"), f1oy: num("f1oy"), f1sx: num("f1sx"), f1sy: num("f1sy"), f1flipY: chk("f1flipY"),
+    uvSplit: num("uvSplit"), splitByY: chk("splitByY"), swapSlices: chk("swapSlices"), udimMode: chk("udimMode"),
+  };
+}
+
+function setVal(id, v, dig = 2) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = Number(v).toFixed(dig);
+}
+
+function syncUniformsFromUI() {
+  const u = readUI();
+  setVal("speedVal", u.animSpeed, 1);
+  setVal("oxVal", u.moveLeftRight); setVal("oyVal", u.moveUpDown);
+  setVal("sxVal", u.scaleX); setVal("syVal", u.scaleY); setVal("mixVal", u.mixAmt);
+  setVal("f0oxVal", u.f0ox); setVal("f0oyVal", u.f0oy); setVal("f0sxVal", u.f0sx); setVal("f0syVal", u.f0sy);
+  setVal("f1oxVal", u.f1ox); setVal("f1oyVal", u.f1oy); setVal("f1sxVal", u.f1sx); setVal("f1syVal", u.f1sy);
+  setVal("splitVal", u.uvSplit);
+  setVal("speed2Val", u.animSpeed2, 1);
+  setVal("ox2Val", u.moveLeftRight2); setVal("oy2Val", u.moveUpDown2);
+  setVal("sx2Val", u.scaleX2); setVal("sy2Val", u.scaleY2); setVal("mix2Val", u.mixAmt2);
+  const rv = document.getElementById("rotVal");
+  if (rv) rv.textContent = ((window._gifRot || 0) * 90) + "°";
+  const rv2 = document.getElementById("rot2Val");
+  if (rv2) rv2.textContent = ((window._gifRot2 || 0) * 90) + "°";
+
+  meshEntries.forEach((e) => {
+    const uu = e.shadedMaterial.uniforms;
+    Object.keys(u).forEach((k) => {
+      if (uu[k] !== undefined) {
+        const v = u[k];
+        uu[k].value = typeof v === "boolean" ? (v ? 1 : 0) : v;
+      }
+    });
+    uu.hasFab0.value = fab0Tex ? 1 : 0;
+    uu.hasFab1.value = fab1Tex ? 1 : 0;
+    if (channel0) uu.iChannel0.value = channel0;
+    if (window._gif2Tex) {
+      uu.iChannel3.value = window._gif2Tex;
+      uu.hasGif2.value = u.gif2Enable ? 1 : 0;
+    } else {
+      uu.hasGif2.value = 0;
+    }
+    uu.gifRot.value = window._gifRot || 0;
+    uu.gifRot2.value = window._gifRot2 || 0;
+    if (uu.flipY2) uu.flipY2.value = u.flipY2 ? 1 : 0;
+    {
+      const s2 = document.querySelector('input[name="gif2Side"]:checked');
+      const side2 = s2 ? s2.value : 'back';
+      let m2 = 0;
+      if (side2 === 'front') m2 = 1;
+      else if (side2 === 'back') m2 = 2;
+      else if (side2 === 'both') m2 = 3;
+      uu.maskMode2.value = m2;
+    }
+    if (fab0Tex) uu.fabric0.value = fab0Tex;
+    if (fab1Tex) uu.fabric1.value = fab1Tex;
+    if (uu.debugTiles) uu.debugTiles.value = u.debugTiles ? 1 : 0;
+    if (uu.maskMode) {
+      const side = getGifSide();
+      const back = getBackTile();
+      let mode = 0;
+      if (side === 'front') mode = 1;
+      else if (side === 'back' || side === 'opposite') mode = 2;
+      else if (side === 'both') mode = 3;
+      uu.maskMode.value = mode;
+      uu.backU.value = back.u;
+      uu.backV.value = back.v;
+    }
+  });
+}
+
+const uiIds = [
+  "cols","rows","speed","ox","oy","sx","sy","mix","useAlpha","decalMode","flipY","perTile","debugTiles","gif2Enable","flipY2","cols2","rows2","speed2","ox2","oy2","sx2","sy2","mix2",
+  "f0ox","f0oy","f0sx","f0sy","f0flipY","f1ox","f1oy","f1sx","f1sy","f1flipY",
+  "uvSplit","splitByY","swapSlices","udimMode",
+];
+uiIds.forEach((id) => {
+  const el = document.getElementById(id);
+  el.addEventListener("input", syncUniformsFromUI);
+  el.addEventListener("change", syncUniformsFromUI);
+});
+
+document.getElementById("btnAllOn").onclick = () => {
+  meshEntries.forEach((e) => { e.useShader = true; e.mesh.material = e.shadedMaterial; });
+  rebuildMeshList();
+};
+document.getElementById("btnAllOff").onclick = () => {
+  meshEntries.forEach((e) => { e.useShader = false; e.mesh.material = e.originalMaterial; });
+  rebuildMeshList();
+};
+
+function buildStudioHLSL() {
+  const u = readUI();
+  const flip1Studio = !u.flipY;
+  const flip2Studio = !u.flipY2;
+  const f = (n) => Number(n);
+  const side = (typeof getGifSide === 'function') ? getGifSide() : 'all';
+  const back = (typeof getBackTile === 'function') ? getBackTile() : { u: 0, v: -1 };
+  const rot = window._gifRot || 0;
+  const rot2 = window._gifRot2 || 0;
+  const s2el = document.querySelector('input[name="gif2Side"]:checked');
+  const side2 = s2el ? s2el.value : 'back';
+  const gif2On = !!(u.gif2Enable && window._gif2Tex);
+
+  const tileExpr = (sd, varName) => {
+    const bu = Number(back.u);
+    const bv = Number(back.v);
+    if (sd === 'front') return `(${varName}.x == 0.0 && ${varName}.y == 0.0)`;
+    if (sd === 'back') return `(${varName}.x == ${bu}.0 && ${varName}.y == ${bv}.0)`;
+    if (sd === 'both') return `((${varName}.x == 0.0 && ${varName}.y == 0.0) || (${varName}.x == ${bu}.0 && ${varName}.y == ${bv}.0))`;
+    return 'true';
+  };
+
+  const rotBlock = (uvVar, r) => {
+    if (!r) return '';
+    if (r === 1) return `    { float2 p = ${uvVar} - 0.5; float tt = p.x; p.x = -p.y; p.y = tt; ${uvVar} = p + 0.5; }\n`;
+    if (r === 2) return `    { float2 p = ${uvVar} - 0.5; p = -p; ${uvVar} = p + 0.5; }\n`;
+    if (r === 3) return `    { float2 p = ${uvVar} - 0.5; float tt = p.x; p.x = p.y; p.y = -tt; ${uvVar} = p + 0.5; }\n`;
+    return '';
+  };
+
+  const colorFix = (vn) => `    ${vn} = pow(max(${vn}, 0.0), 2.2);
+    ${vn} = (${vn} - 0.5) * 1.15 + 0.5;
+    {
+        float _luma = dot(${vn}, float3(0.299, 0.587, 0.114));
+        ${vn} = lerp(float3(_luma, _luma, _luma), ${vn}, 1.25);
+    }
+    ${vn} = saturate(${vn});`;
+
+  const ch = (id) => 'iChannel' + (document.getElementById(id)?.value ?? '0');
+  const cG1 = ch('chGif1'), cG2 = ch('chGif2'), cF0 = ch('chFab0'), cF1 = ch('chFab1');
+  const dbg2 = chk('dbgGif2');
+  const skipFix = chk('noColorFix');
+  // one generator => gif1 and gif2 are guaranteed identical code paths
+  const gifBlock = (n, chan, sd, p, flipStudio, r) => `
+    // --- gif ${n} = ${chan} ---
+    {
+        float tileOn${n} = ${tileExpr(sd, 'tileId')} ? 1.0 : 0.0;
+        float2 center${n} = frac(float2(${f(p.mlr)}, ${f(p.mud)}));
+        float2 a${n} = (frac(uv) - center${n}) * float2(${f(p.sx)}, ${f(p.sy)}) + 0.5;
+        float in${n} = (a${n}.x >= 0.0 && a${n}.x <= 1.0 && a${n}.y >= 0.0 && a${n}.y <= 1.0) ? 1.0 : 0.0;
+        a${n} = saturate(a${n});
+${flipStudio ? `        a${n}.y = 1.0 - a${n}.y;\n` : ''}${rotBlock('a' + n, r)}        a${n} = a${n} * 0.996 + 0.002;
+        float cols${n} = ${f(p.cols)}.0;
+        float rows${n} = ${f(p.rows)}.0;
+        float tf${n} = max(cols${n} * rows${n}, 1.0);
+        float fi${n} = floor(fmod(iTime * ${f(p.speed)}, tf${n}));
+        float cc${n} = fmod(fi${n}, cols${n});
+        float cr${n} = floor(fi${n} / cols${n});
+        float2 s${n} = float2((a${n}.x + cc${n}) / cols${n}, (a${n}.y + cr${n}) / rows${n});
+${(n === 2 && dbg2) ? `        // DEBUG: no gif 2 fetch at all
+        rgb = lerp(rgb, float3(1.0, 0.0, 1.0), 0.85 * in${n} * tileOn${n});
+` : `        // always sample (no texture fetch inside a branch), weight by mask
+        float4 t${n} = texture(${chan}, s${n});
+        float al${n} = ${u.useAlpha ? `t${n}.a` : '1.0'};
+        rgb = lerp(rgb, t${n}.rgb, al${n} * ${f(p.mix)} * in${n} * tileOn${n});
+`}    }`;
+
+  const gif1Block = gifBlock(1, cG1, side, { mlr: u.moveLeftRight, mud: u.moveUpDown, sx: u.scaleX, sy: u.scaleY, cols: u.totalColumns, rows: u.totalRows, speed: u.animSpeed, mix: u.mixAmt }, flip1Studio, rot);
+  const gif2Block = gif2On ? gifBlock(2, cG2, side2, { mlr: u.moveLeftRight2, mud: u.moveUpDown2, sx: u.scaleX2, sy: u.scaleY2, cols: u.totalColumns2, rows: u.totalRows2, speed: u.animSpeed2, mix: u.mixAmt2 }, flip2Studio, rot2) : '';
+
+  return `// Channel map (Studio Advanced images):
+//   gif 1 = ${cG1} | gif 2 = ${cG2} | fabric .1001 = ${cF0} | fabric .1011 = ${cF1}
+// gif1 rot=${rot * 90}° flip=${flip1Studio} | gif2 rot=${rot2 * 90}° flip=${flip2Studio}
+// back=(${back.u},${back.v}) gif1Side=${side} gif2Side=${side2}
+float4 shade(float2 uv, float4 color)
+{
+    float2 tileId = floor(uv);
+    float2 localUV = frac(uv);
+
+    // fabric on iChannel2 / iChannel3
+    float use0 = (tileId.x == 0.0 && tileId.y == 0.0) ? 1.0 : 0.0;
+    if (tileId.x == 0.0 && tileId.y == 1.0) use0 = 0.0;
+    float2 u0 = localUV;
+    u0.x = (u0.x + ${f(u.f0ox)} - 0.5) * ${f(u.f0sx)} + 0.5;
+    u0.y = (u0.y + ${f(u.f0oy)} - 0.5) * ${f(u.f0sy)} + 0.5;
+    float2 u1 = localUV;
+    u1.x = (u1.x + ${f(u.f1ox)} - 0.5) * ${f(u.f1sx)} + 0.5;
+    u1.y = (u1.y + ${f(u.f1oy)} - 0.5) * ${f(u.f1sy)} + 0.5;
+    float3 fab0 = texture(${cF0}, u0).rgb;
+    float3 fab1 = texture(${cF1}, u1).rgb;
+    float3 fabric = lerp(fab1, fab0, use0);
+
+    float3 rgb = fabric;
+${gif1Block}
+${gif2Block}
+
+${skipFix ? '' : colorFix('rgb')}
+    return float4(rgb, 1.0);
+}
+`;
+}
+
+
+async function copyHLSL() {
+  const code = buildStudioHLSL();
+  const status = document.getElementById("copyStatus");
+  try {
+    await navigator.clipboard.writeText(code);
+    status.textContent = "Copied full shade() — paste into Studio.";
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = code;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); status.textContent = "Copied."; }
+    catch { status.textContent = "Clipboard blocked — code in alert."; alert(code); }
+    document.body.removeChild(ta);
+  }
+}
+document.getElementById("btnCopy").onclick = copyHLSL;
+
+
+// --- UV tile detect + mask ---
+const TILE_RES = 8;
+let detectedTiles = []; // [{u,v,key}]
+let enabledTiles = new Set();
+let tileMaskTex = null;
+
+function getGifSide() {
+  const el = document.querySelector('input[name="gifSide"]:checked');
+  return el ? el.value : 'all';
+}
+
+function getBackTile() {
+  const sel = document.getElementById('backTileSelect');
+  const key = sel && sel.value ? sel.value : '1,0';
+  const [u, v] = key.split(',').map(Number);
+  return { u, v, key: u + ',' + v };
+}
+
+function syncEnabledFromSide() {
+  const side = getGifSide();
+  const back = getBackTile();
+  enabledTiles = new Set();
+  if (side === 'front') {
+    enabledTiles.add('0,0');
+  } else if (side === 'back' || side === 'opposite') {
+    enabledTiles.add(back.key);
+  } else if (side === 'both') {
+    enabledTiles.add('0,0');
+    enabledTiles.add(back.key);
+  } else {
+    detectedTiles.forEach((t) => enabledTiles.add(t.key));
+  }
+  const info = document.getElementById('tileMapInfo');
+  if (info) {
+    info.textContent = side === 'front' ? 'Gif → (0,0) front only'
+      : (side === 'back' || side === 'opposite') ? `Gif → (${back.u},${back.v}) back only — rotate mesh to check`
+      : side === 'both' ? `Gif → (0,0) + (${back.u},${back.v})`
+      : 'Gif → every detected tile';
+  }
+}
+
+function makeTileMaskTexture() {
+  syncEnabledFromSide();
+  const data = new Uint8Array(TILE_RES * TILE_RES * 4);
+  for (let v = 0; v < TILE_RES; v++) {
+    for (let u = 0; u < TILE_RES; u++) {
+      const on = enabledTiles.has(u + ',' + v) ? 255 : 0;
+      const i = (v * TILE_RES + u) * 4;
+      data[i] = data[i+1] = data[i+2] = on;
+      data[i+3] = 255;
+    }
+  }
+  const tex = new THREE.DataTexture(data, TILE_RES, TILE_RES, THREE.RGBAFormat);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.flipY = false;
+  tex.needsUpdate = true;
+  tileMaskTex = tex;
+
+  const side = getGifSide();
+  const back = getBackTile();
+  let mode = 0;
+  if (side === 'front') mode = 1;
+  else if (side === 'back' || side === 'opposite') mode = 2;
+  else if (side === 'both') mode = 3;
+
+  meshEntries.forEach((e) => {
+    e.shadedMaterial.uniforms.tileMask.value = tex;
+    e.shadedMaterial.uniforms.useTileMask.value = mode > 0 ? 1 : 0;
+    e.shadedMaterial.uniforms.maskMode.value = mode;
+    e.shadedMaterial.uniforms.backU.value = back.u;
+    e.shadedMaterial.uniforms.backV.value = back.v;
+  });
+  return tex;
+}
+
+function scanTilesFromRoot(root) {
+  const counts = new Map(); // key -> vertex count
+  const addUV = (attr) => {
+    if (!attr) return;
+    for (let i = 0; i < attr.count; i++) {
+      const u = attr.getX(i);
+      const v = attr.getY(i);
+      const tu = Math.floor(u + 1e-5);
+      const tv = Math.floor(v + 1e-5);
+      // allow a wider range; clamp into mask grid later
+      if (tu < -2 || tv < -2 || tu >= TILE_RES + 2 || tv >= TILE_RES + 2) continue;
+      const key = tu + ',' + tv;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+  };
+  root.traverse((o) => {
+    if (!o.isMesh || !o.geometry) return;
+    addUV(o.geometry.attributes.uv);
+    addUV(o.geometry.attributes.uv2);
+    addUV(o.geometry.attributes.uv1);
+  });
+  if (!counts.size) counts.set('0,0', 1);
+  detectedTiles = [...counts.entries()].map(([k, n]) => {
+    const [u, v] = k.split(',').map(Number);
+    return { u, v, key: k, count: n };
+  }).sort((a, b) => b.count - a.count || a.v - b.v || a.u - b.u);
+  enabledTiles = new Set(detectedTiles.map((t) => t.key));
+  rebuildTileUI();
+  makeTileMaskTexture();
+  const summary = detectedTiles.map((x) => `(${x.u},${x.v}):${x.count}`).join(' ');
+  hud.textContent = `UV tiles (u,v):count → ${summary}`;
+  console.log('[tiles]', summary);
+}
+
+function rebuildTileUI() {
+  const box = document.getElementById('tileBox');
+  if (!detectedTiles.length) {
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = 'block';
+  const sel = document.getElementById('backTileSelect');
+  const prev = sel.value;
+  sel.innerHTML = '';
+  // every detected tile (with vert counts) so we can solo any of them
+  const options = detectedTiles.length ? detectedTiles : [
+    { u: 0, v: 0, key: '0,0', count: 0 },
+    { u: 1, v: 0, key: '1,0', count: 0 },
+    { u: 2, v: 0, key: '2,0', count: 0 },
+    { u: 0, v: 1, key: '0,1', count: 0 },
+  ];
+  options.forEach((t) => {
+    const opt = document.createElement('option');
+    opt.value = t.key;
+    const n = t.count != null ? ` — ${t.count} verts` : '';
+    opt.textContent = `tile (${t.u}, ${t.v})${n}`;
+    sel.appendChild(opt);
+  });
+  if ([...sel.options].some((o) => o.value === prev)) sel.value = prev;
+  else {
+    // default first non-(0,0) if any
+    const non0 = options.find((t) => !(t.u === 0 && t.v === 0));
+    sel.value = non0 ? non0.key : options[0].key;
+  }
+
+  const hint = document.getElementById('tileHint');
+  if (hint) {
+    hint.textContent = `Tiles in GLB: ${detectedTiles.map((x) => '('+x.u+','+x.v+')').join(', ')}. Pick Back tile and use "Back only" or Cycle to find which is the back of the jacket.`;
+  }
+  syncEnabledFromSide();
+}
+
+document.querySelectorAll('input[name="gifSide"]').forEach((el) => {
+  el.addEventListener('change', () => makeTileMaskTexture());
+});
+document.getElementById('backTileSelect')?.addEventListener('change', () => {
+  const back = document.querySelector('input[name="gifSide"][value="back"]');
+  if (back) back.checked = true;
+  makeTileMaskTexture();
+});
+document.getElementById('btnCycleBack')?.addEventListener('click', () => {
+  const sel = document.getElementById('backTileSelect');
+  if (!sel || !sel.options.length) return;
+  sel.selectedIndex = (sel.selectedIndex + 1) % sel.options.length;
+  const back = document.querySelector('input[name="gifSide"][value="back"]');
+  if (back) back.checked = true;
+  makeTileMaskTexture();
+  hud.textContent = `Solo tile (${sel.value}) — rotate to see if this is the back`;
+});
+
+
+
+window._gifRot = 0;
+window._gifRot2 = 0;
+window._gif2Tex = null;
+document.getElementById("btnRot")?.addEventListener("click", () => {
+  window._gifRot = ((window._gifRot || 0) + 1) % 4;
+  syncUniformsFromUI();
+  hud.textContent = "Gif 1 rotation: " + (window._gifRot * 90) + "°";
+});
+document.getElementById("btnRot2")?.addEventListener("click", () => {
+  window._gifRot2 = ((window._gifRot2 || 0) + 1) % 4;
+  syncUniformsFromUI();
+  hud.textContent = "Gif 2 rotation: " + (window._gifRot2 * 90) + "°";
+});
+document.querySelectorAll('input[name="gif2Side"]').forEach((el) => {
+  el.addEventListener("change", () => syncUniformsFromUI());
+});
+document.getElementById("tex2Input")?.addEventListener("change", (e) => {
+  const f = e.target.files?.[0]; if (!f) return;
+  document.getElementById("tex2Name").textContent = f.name;
+  loadTexFile(f, (tex) => {
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    window._gif2Tex = tex;
+    const en = document.getElementById("gif2Enable");
+    if (en) en.checked = true;
+    meshEntries.forEach((ent) => {
+      ent.shadedMaterial.uniforms.iChannel3.value = tex;
+      ent.shadedMaterial.uniforms.hasGif2.value = 1;
+    });
+    syncUniformsFromUI();
+    hud.textContent = "Second gif loaded → iChannel3";
+  });
+});
+
+const loader = new GLTFLoader();
+const texLoader = new THREE.TextureLoader();
+
+function loadTexFile(file, onReady) {
+  const url = URL.createObjectURL(file);
+  texLoader.load(url, (tex) => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.flipY = true;
+    tex.needsUpdate = true;
+    onReady(tex, url);
+  });
+}
+
+/** Substance / UDIM: name ends with .1001, .1011, _1001, etc. */
+function parseUdim(filename) {
+  const m = String(filename).match(/(?:^|[._-])(10\d{2})(?:\.|$)/);
+  if (!m) return null;
+  const udim = parseInt(m[1], 10);
+  if (udim < 1001 || udim > 1099) return null;
+  const idx = udim - 1001;
+  const u = idx % 10;
+  const v = Math.floor(idx / 10);
+  return { udim, u, v, key: u + ',' + v };
+}
+
+function applyFabric(slot, tex, label) {
+  if (slot === 0) {
+    fab0Tex = tex;
+    document.getElementById('fab0Name').textContent = label;
+    meshEntries.forEach((e) => {
+      e.shadedMaterial.uniforms.fabric0.value = tex;
+      e.shadedMaterial.uniforms.hasFab0.value = 1;
+    });
+  } else {
+    fab1Tex = tex;
+    document.getElementById('fab1Name').textContent = label;
+    meshEntries.forEach((e) => {
+      e.shadedMaterial.uniforms.fabric1.value = tex;
+      e.shadedMaterial.uniforms.hasFab1.value = 1;
+    });
+  }
+  // force UDIM mode when assigned by name
+  const ud = document.getElementById('udimMode');
+  if (ud) { ud.checked = true; }
+  syncUniformsFromUI();
+}
+
+function importUdimFiles(fileList) {
+  const files = [...fileList];
+  if (!files.length) return;
+  let msg = [];
+  let pending = files.length;
+  files.forEach((file) => {
+    const info = parseUdim(file.name);
+    loadTexFile(file, (tex) => {
+      if (info) {
+        // 1001 → slot0, 1011 → slot1 (primary pair); other UDIMs map 1001-class to 0, rest to 1 if only two slots
+        let slot = (info.u === 0 && info.v === 0) ? 0 : 1;
+        if (info.udim === 1001) slot = 0;
+        if (info.udim === 1011) slot = 1;
+        applyFabric(slot, tex, `${file.name} → UDIM ${info.udim} tile (${info.u},${info.v})`);
+        msg.push(`UDIM ${info.udim} → ch${slot + 1} tile (${info.u},${info.v})`);
+      } else {
+        // no udim in name: first empty slot
+        const slot = !fab0Tex ? 0 : 1;
+        applyFabric(slot, tex, file.name + ' (no UDIM in name)');
+        msg.push(`${file.name} → ch${slot + 1} (manual)`);
+      }
+      pending--;
+      if (pending === 0) {
+        document.getElementById('udimStatus').textContent = msg.join(' · ');
+        hud.textContent = 'UDIM import: ' + msg.join(' · ');
+      }
+    });
+  });
+}
+
+function loadGLB(file) {
+  const url = URL.createObjectURL(file);
+  document.getElementById("glbName").textContent = file.name;
+  loader.load(url, (gltf) => {
+    clearModel();
+    modelRoot = gltf.scene;
+    modelRoot.traverse((o) => {
+      if (!o.isMesh) return;
+      const original = o.material;
+      const shaded = makeShadedMaterial();
+      const srcMat = Array.isArray(original) ? original[0] : original;
+      const albedo = srcMat && (srcMat.map || srcMat.colorMap || srcMat.baseColorMap);
+      // seed fabric0 from embedded map if user hasn't uploaded slices yet
+      if (albedo && !fab0Tex) {
+        shaded.uniforms.fabric0.value = albedo;
+        shaded.uniforms.hasFab0.value = 1;
+      }
+      if (srcMat?.color) shaded.uniforms.baseTint.value = srcMat.color.clone();
+      if (channel0) shaded.uniforms.iChannel0.value = channel0;
+      if (fab0Tex) { shaded.uniforms.fabric0.value = fab0Tex; shaded.uniforms.hasFab0.value = 1; }
+      if (fab1Tex) { shaded.uniforms.fabric1.value = fab1Tex; shaded.uniforms.hasFab1.value = 1; }
+      if (tileMaskTex) {
+        shaded.uniforms.tileMask.value = tileMaskTex;
+        shaded.uniforms.useTileMask.value = getGifSide() === 'all' ? 0 : 1;
+      }
+      o.material = shaded;
+      meshEntries.push({ mesh: o, originalMaterial: original, shadedMaterial: shaded, useShader: true });
+    });
+    scene.add(modelRoot);
+    fitCameraToObject(modelRoot);
+    rebuildMeshList();
+    scanTilesFromRoot(modelRoot);
+    syncUniformsFromUI();
+    hud.textContent = `${meshEntries.length} mesh(es) · ${detectedTiles.length} UV tile(s) found`;
+    URL.revokeObjectURL(url);
+  }, undefined, (err) => {
+    hud.textContent = "GLB failed: " + (err?.message || err);
+    URL.revokeObjectURL(url);
+  });
+}
+
+document.getElementById("glbInput").onchange = (e) => { if (e.target.files?.[0]) loadGLB(e.target.files[0]); };
+document.getElementById("texInput").onchange = (e) => {
+  const f = e.target.files?.[0]; if (!f) return;
+  document.getElementById("texName").textContent = f.name;
+  const img = document.getElementById("texPreview");
+  img.src = URL.createObjectURL(f); img.style.display = "block";
+  loadTexFile(f, (tex) => {
+    channel0 = tex;
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    meshEntries.forEach((e) => { e.shadedMaterial.uniforms.iChannel0.value = tex; });
+    hud.textContent = "Channel 0 (gif) loaded";
+  });
+};
+document.getElementById("udimInput").onchange = (e) => {
+  if (e.target.files?.length) importUdimFiles(e.target.files);
+};
+document.getElementById("fab0Input").onchange = (e) => {
+  const f = e.target.files?.[0]; if (!f) return;
+  const info = parseUdim(f.name);
+  loadTexFile(f, (tex) => {
+    applyFabric(0, tex, info ? `${f.name} → UDIM ${info.udim}` : f.name);
+    hud.textContent = "Fabric .1001 / slot 0 loaded";
+  });
+};
+document.getElementById("fab1Input").onchange = (e) => {
+  const f = e.target.files?.[0]; if (!f) return;
+  const info = parseUdim(f.name);
+  loadTexFile(f, (tex) => {
+    applyFabric(1, tex, info ? `${f.name} → UDIM ${info.udim}` : f.name);
+    hud.textContent = "Fabric .1011 / slot 1 loaded";
+  });
+};
+
+viewport.addEventListener("dragover", (e) => e.preventDefault());
+viewport.addEventListener("drop", (e) => {
+  e.preventDefault();
+  const files = [...(e.dataTransfer?.files || [])];
+  if (!files.length) return;
+  const glb = files.find((f) => /\.(glb|gltf)$/i.test(f.name));
+  if (glb) { loadGLB(glb); return; }
+  const udims = files.filter((f) => parseUdim(f.name) && /\.(png|jpg|jpeg|webp|tga)$/i.test(f.name));
+  if (udims.length) { importUdimFiles(udims); return; }
+  const img = files.find((f) => /\.(png|jpg|jpeg|webp|gif)$/i.test(f.name));
+  if (img) {
+    document.getElementById("texName").textContent = img.name;
+    loadTexFile(img, (tex) => {
+      channel0 = tex;
+      tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.NearestFilter;
+      meshEntries.forEach((e) => { e.shadedMaterial.uniforms.iChannel0.value = tex; });
+    });
+  }
+});
+
+// placeholder
+{
+  const geo = new THREE.CapsuleGeometry(0.28, 0.9, 6, 12);
+  const mat = makeShadedMaterial();
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.y = 0.85; mesh.name = "Placeholder";
+  modelRoot = new THREE.Group(); modelRoot.add(mesh); scene.add(modelRoot);
+  meshEntries.push({
+    mesh, originalMaterial: new THREE.MeshStandardMaterial({ color: 0xcccccc }),
+    shadedMaterial: mat, useShader: true,
+  });
+  rebuildMeshList();
+  syncUniformsFromUI();
+}
+
+const clock = new THREE.Clock();
+(function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+  meshEntries.forEach((e) => { e.shadedMaterial.uniforms.iTime.value = t; });
+  controls.update();
+  renderer.render(scene, camera);
+})();
+  </script>
+</body>
+</html>
